@@ -8,6 +8,9 @@
 *.so
 *.dylib
 
+# go runtime file
+gator
+
 # Test binary, built with `go test -c`
 *.test
 
