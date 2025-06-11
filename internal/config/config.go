@@ -38,12 +38,13 @@ func getConfigFilePath() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("error finding home directory: %v", err)
 	}
-	return homeDir + configFileName, nil
+	return homeDir + "/" + configFileName, nil
 }
 
-func (c Config) SetUser() {
-	c.CurrentUsername = "scotty"
+func (c Config) SetUser(username string) error {
+	c.CurrentUsername = username
 	write(c)
+	return nil
 }
 
 func write(cfg Config) error {
