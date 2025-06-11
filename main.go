@@ -40,7 +40,6 @@ func main() {
 		fmt.Printf("error running command: %v\n", err)
 		os.Exit(1)
 	}
-	os.Exit(0)
 }
 
 type command struct {
@@ -75,7 +74,7 @@ func (c *commands) register(name string, f func(*state, command) error) {
 
 func handlerLogin(s *state, cmd command) error {
 	if len(cmd.args) <= 0 {
-		return fmt.Errorf("no username provided by user")
+		return fmt.Errorf("no username found. Please add username after login command")
 	}
 	if len(cmd.args) > 1 {
 		return fmt.Errorf("too many arguemnts")
