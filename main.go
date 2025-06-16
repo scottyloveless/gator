@@ -3,7 +3,11 @@ package main
 import (
 	"context"
 	"database/sql"
+	"encoding/xml"
 	"fmt"
+	"html"
+	"io"
+	"net/http"
 	"os"
 	"time"
 
@@ -45,6 +49,7 @@ func main() {
 	cmds.register("register", handlerRegister)
 	cmds.register("reset", handlerReset)
 	cmds.register("users", handlerUsers)
+	cmds.register("agg", handlerAgg)
 
 	args := os.Args
 	if len(args) < 2 {
@@ -178,4 +183,72 @@ func handlerUsers(s *state, cmd command) error {
 	}
 
 	return nil
+}
+
+func handlerAgg(s *state, cmd command) error {
+	feed, err := fetchFeed(context.Background(), "https://www.wagslane.dev/index.xml")
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%v", feed)
+
+	return nil
+}
+
+type RSSFeed struct {
+	Channel struct {
+		Title       string    `xml:"title"`
+		Link        string    `xml:"link"`
+		Description string    `xml:"description"`
+		Item        []RSSItem `xml:"item"`
+	} `xml:"channel"`
+}
+
+type RSSItem struct {
+	Title       string `xml:"title"`
+	Link        string `xml:"link"`
+	Description string `xml:"description"`
+	PubDate     string `xml:"pubDate"`
+}
+
+func fetchFeed(ctx context.Context, feedURL string) (*RSSFeed, error) {
+	var feed *RSSFeed
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, feedURL, nil)
+	if err != nil {
+		return &RSSFeed{}, err
+	}
+
+	req.Header.Set("User-Agent", "gator")
+
+	client := &http.Client{}
+
+	res, err := client.Do(req)
+	if err != nil {
+		return &RSSFeed{}, err
+	}
+	defer res.Body.Close()
+
+	data, err := io.ReadAll(res.Body)
+	if err != nil {
+		return &RSSFeed{}, err
+	}
+
+	if err := xml.Unmarshal(data, &feed); err != nil {
+		return &RSSFeed{}, err
+	}
+
+	feed.Channel.Title = html.UnescapeString(feed.Channel.Title)
+	feed.Channel.Description = html.UnescapeString(feed.Channel.Description)
+
+	if len(feed.Channel.Item) == 0 {
+		return &RSSFeed{}, fmt.Errorf("RSS has no items")
+	}
+	for _, rssItemReturned := range feed.Channel.Item {
+		rssItemReturned.Title = html.UnescapeString(rssItemReturned.Title)
+		rssItemReturned.Description = html.UnescapeString(rssItemReturned.Description)
+	}
+
+	return feed, nil
 }
