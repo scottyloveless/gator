@@ -217,7 +217,7 @@ func fetchFeed(ctx context.Context, feedURL string) (*RSSFeed, error) {
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, feedURL, nil)
 	if err != nil {
-		return &RSSFeed{}, err
+		return nil, err
 	}
 
 	req.Header.Set("User-Agent", "gator")
@@ -226,28 +226,28 @@ func fetchFeed(ctx context.Context, feedURL string) (*RSSFeed, error) {
 
 	res, err := client.Do(req)
 	if err != nil {
-		return &RSSFeed{}, err
+		return nil, err
 	}
 	defer res.Body.Close()
 
 	data, err := io.ReadAll(res.Body)
 	if err != nil {
-		return &RSSFeed{}, err
+		return nil, err
 	}
 
 	if err := xml.Unmarshal(data, &feed); err != nil {
-		return &RSSFeed{}, err
+		return nil, err
 	}
 
 	feed.Channel.Title = html.UnescapeString(feed.Channel.Title)
 	feed.Channel.Description = html.UnescapeString(feed.Channel.Description)
 
 	if len(feed.Channel.Item) == 0 {
-		return &RSSFeed{}, fmt.Errorf("RSS has no items")
+		return nil, fmt.Errorf("RSS Feed has no items")
 	}
-	for _, rssItemReturned := range feed.Channel.Item {
-		rssItemReturned.Title = html.UnescapeString(rssItemReturned.Title)
-		rssItemReturned.Description = html.UnescapeString(rssItemReturned.Description)
+	for i := range feed.Channel.Item {
+		feed.Channel.Item[i].Title = html.UnescapeString(feed.Channel.Item[i].Title)
+		feed.Channel.Item[i].Description = html.UnescapeString(feed.Channel.Item[i].Description)
 	}
 
 	return feed, nil
