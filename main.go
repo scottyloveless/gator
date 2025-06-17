@@ -50,6 +50,8 @@ func main() {
 	cmds.register("reset", handlerReset)
 	cmds.register("users", handlerUsers)
 	cmds.register("agg", handlerAgg)
+	cmds.register("addfeed", handlerAddFeed)
+	cmds.register("feeds", handlerFeeds)
 
 	args := os.Args
 	if len(args) < 2 {
@@ -251,4 +253,57 @@ func fetchFeed(ctx context.Context, feedURL string) (*RSSFeed, error) {
 	}
 
 	return feed, nil
+}
+
+func handlerAddFeed(s *state, cmd command) error {
+	userName := s.config.CurrentUsername
+	user, err := s.db.CheckUser(context.Background(), userName)
+	if err != nil {
+		return fmt.Errorf("user not found when adding feed: %v", err)
+	}
+
+	userId := user.ID
+
+	if len(cmd.args) < 2 {
+		fmt.Println("not enough arguments. syntax is gator addfeed 'Hacker News' 'https://hackernews.com/rss'")
+		os.Exit(1)
+	}
+
+	name := cmd.args[0]
+	url := cmd.args[1]
+
+	params := database.CreateFeedParams{
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		Name:      name,
+		Url:       url,
+		UserID:    userId,
+	}
+
+	feed, err := s.db.CreateFeed(context.Background(), params)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("feed added successfully: %v", feed.Name)
+
+	return nil
+}
+
+func handlerFeeds(s *state, cmd command) error {
+	feeds, err := s.db.ListFeeds(context.Background())
+	if err != nil {
+		return err
+	}
+
+	if len(feeds) == 0 {
+		fmt.Println("no feeds found.")
+		os.Exit(1)
+	}
+
+	for _, feed := range feeds {
+		fmt.Printf("Name: %v\nURL: %v\nAdded by: %v\n", feed.Name, feed.Url, feed.Username.String)
+	}
+
+	return nil
 }

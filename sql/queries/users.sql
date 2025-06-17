@@ -14,7 +14,12 @@ WHERE name = $1
 LIMIT 1;
 
 -- name: ResetUsers :exec
-TRUNCATE TABLE users;
+DELETE FROM users;
 
 -- name: GetUsers :many
 SELECT * FROM users;
+
+-- name: GetUsersNameFromID :one
+SELECT name FROM users
+WHERE id = $1
+LIMIT 1;

@@ -97,8 +97,21 @@ func (q *Queries) GetUsers(ctx context.Context) ([]User, error) {
 	return items, nil
 }
 
+const getUsersNameFromID = `-- name: GetUsersNameFromID :one
+SELECT name FROM users
+WHERE id = $1
+LIMIT 1
+`
+
+func (q *Queries) GetUsersNameFromID(ctx context.Context, id uuid.UUID) (string, error) {
+	row := q.db.QueryRowContext(ctx, getUsersNameFromID, id)
+	var name string
+	err := row.Scan(&name)
+	return name, err
+}
+
 const resetUsers = `-- name: ResetUsers :exec
-TRUNCATE TABLE users
+DELETE FROM users
 `
 
 func (q *Queries) ResetUsers(ctx context.Context) error {
