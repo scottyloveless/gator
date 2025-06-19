@@ -19,8 +19,8 @@ import (
 )
 
 type state struct {
-	db     *database.Queries
-	config *config.Config
+	db  *database.Queries
+	cfg *config.Config
 }
 
 func main() {
@@ -37,8 +37,8 @@ func main() {
 	dbQueries := database.New(db)
 
 	appState := state{
-		db:     dbQueries,
-		config: &globalConfig,
+		db:  dbQueries,
+		cfg: &globalConfig,
 	}
 
 	cmdMap := make(map[string]func(*state, command) error)
@@ -50,8 +50,10 @@ func main() {
 	cmds.register("reset", handlerReset)
 	cmds.register("users", handlerUsers)
 	cmds.register("agg", handlerAgg)
-	cmds.register("addfeed", handlerAddFeed)
+	cmds.register("addfeed", middlewareLoggedIn(handlerAddFeed))
 	cmds.register("feeds", handlerFeeds)
+	cmds.register("follow", middlewareLoggedIn(handlerFollow))
+	cmds.register("following", middlewareLoggedIn(handlerFollowing))
 
 	args := os.Args
 	if len(args) < 2 {
@@ -79,7 +81,7 @@ type commands struct {
 }
 
 func (c *commands) run(s *state, cmd command) error {
-	if s.config == nil {
+	if s.cfg == nil {
 		return fmt.Errorf("no state found")
 	}
 
@@ -107,13 +109,13 @@ func handlerLogin(s *state, cmd command) error {
 		return fmt.Errorf("too many arguemnts")
 	}
 
-	checkUser, _ := s.db.CheckUser(context.Background(), cmd.args[0])
+	checkUser, _ := s.db.GetUser(context.Background(), cmd.args[0])
 	if checkUser.Name != cmd.args[0] {
 		fmt.Println("user doesn't exist")
 		os.Exit(1)
 	}
 
-	if err := s.config.SetUser(cmd.args[0]); err != nil {
+	if err := s.cfg.SetUser(cmd.args[0]); err != nil {
 		return fmt.Errorf("error setting user: %v", err)
 	}
 
@@ -137,7 +139,7 @@ func handlerRegister(s *state, cmd command) error {
 		Name:      cmd.args[0],
 	}
 
-	checkUser, _ := s.db.CheckUser(context.Background(), cmd.args[0])
+	checkUser, _ := s.db.GetUser(context.Background(), cmd.args[0])
 	if checkUser.Name == cmd.args[0] {
 		fmt.Println("user already exists")
 		os.Exit(1)
@@ -148,7 +150,7 @@ func handlerRegister(s *state, cmd command) error {
 		return fmt.Errorf("error creating user: %v", err)
 	}
 
-	if err := s.config.SetUser(cmd.args[0]); err != nil {
+	if err := s.cfg.SetUser(cmd.args[0]); err != nil {
 		return fmt.Errorf("error setting user: %v", err)
 	}
 
@@ -170,7 +172,7 @@ func handlerUsers(s *state, cmd command) error {
 	if err != nil {
 		return err
 	}
-	currentUserLoggedIn := s.config.CurrentUsername
+	currentUserLoggedIn := s.cfg.CurrentUserName
 
 	if len(users) == 0 {
 		return fmt.Errorf("no users found")
@@ -255,15 +257,7 @@ func fetchFeed(ctx context.Context, feedURL string) (*RSSFeed, error) {
 	return feed, nil
 }
 
-func handlerAddFeed(s *state, cmd command) error {
-	userName := s.config.CurrentUsername
-	user, err := s.db.CheckUser(context.Background(), userName)
-	if err != nil {
-		return fmt.Errorf("user not found when adding feed: %v", err)
-	}
-
-	userId := user.ID
-
+func handlerAddFeed(s *state, cmd command, user database.User) error {
 	if len(cmd.args) < 2 {
 		fmt.Println("not enough arguments. syntax is gator addfeed 'Hacker News' 'https://hackernews.com/rss'")
 		os.Exit(1)
@@ -277,11 +271,20 @@ func handlerAddFeed(s *state, cmd command) error {
 		UpdatedAt: time.Now(),
 		Name:      name,
 		Url:       url,
-		UserID:    userId,
+		UserID:    user.ID,
 	}
 
 	feed, err := s.db.CreateFeed(context.Background(), params)
 	if err != nil {
+		return err
+	}
+
+	newCmd := command{
+		name: "follow",
+		args: []string{url},
+	}
+
+	if err := handlerFollow(s, newCmd, user); err != nil {
 		return err
 	}
 
@@ -307,3 +310,71 @@ func handlerFeeds(s *state, cmd command) error {
 
 	return nil
 }
+
+func handlerFollow(s *state, cmd command, user database.User) error {
+	if len(cmd.args) == 0 {
+		fmt.Println("Please add URL after follow command")
+		os.Exit(1)
+	}
+	url := cmd.args[0]
+
+	userId := user.ID
+
+	feed, err := s.db.GetFeedByURL(context.Background(), url)
+	if err != nil {
+		fmt.Printf("No feed found at URL: %v\n", cmd.args[0])
+		os.Exit(1)
+	}
+
+	params := database.CreateFeedFollowParams{
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		UserID:    userId,
+		FeedID:    feed.ID,
+	}
+
+	feedFollow, err := s.db.CreateFeedFollow(context.Background(), params)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Feed successfully followed by %v: %v", feedFollow.UserName, feedFollow.FeedName)
+
+	return nil
+}
+
+func handlerFollowing(s *state, cmd command, user database.User) error {
+	feeds, err := s.db.GetFeedFollowsForUser(context.Background(), user.ID)
+	if err != nil {
+		return err
+	}
+
+	if len(feeds) == 0 {
+		fmt.Printf("No feeds for user: %v\n", user.Name)
+		os.Exit(1)
+	}
+
+	for _, feed := range feeds {
+		fmt.Printf("%v\n", feed.FeedName)
+	}
+
+	return nil
+}
+
+func middlewareLoggedIn(handler func(s *state, cmd command, user database.User) error) func(*state, command) error {
+	return func(s *state, cmd command) error {
+		user, err := s.db.GetUser(context.Background(), s.cfg.CurrentUserName)
+		if err != nil {
+			return err
+		}
+
+		if err := handler(s, cmd, user); err != nil {
+			return err
+		}
+
+		return nil
+	}
+}
+
+// func handlerUnfollow(s *state, cmd command, user database.User) error {
+// }

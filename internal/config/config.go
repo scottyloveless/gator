@@ -10,7 +10,7 @@ const configFileName = ".gatorconfig.json"
 
 type Config struct {
 	DBurl           string `json:"db_url"`
-	CurrentUsername string `json:"current_user_name"`
+	CurrentUserName string `json:"current_user_name"`
 }
 
 func Read() (Config, error) {
@@ -42,7 +42,7 @@ func getConfigFilePath() (string, error) {
 }
 
 func (c Config) SetUser(username string) error {
-	c.CurrentUsername = username
+	c.CurrentUserName = username
 	write(c)
 	return nil
 }
