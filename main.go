@@ -54,6 +54,7 @@ func main() {
 	cmds.register("feeds", handlerFeeds)
 	cmds.register("follow", middlewareLoggedIn(handlerFollow))
 	cmds.register("following", middlewareLoggedIn(handlerFollowing))
+	cmds.register("unfollow", middlewareLoggedIn(handlerUnfollow))
 
 	args := os.Args
 	if len(args) < 2 {
@@ -300,8 +301,7 @@ func handlerFeeds(s *state, cmd command) error {
 	}
 
 	if len(feeds) == 0 {
-		fmt.Println("no feeds found.")
-		os.Exit(1)
+		return fmt.Errorf("no feeds found")
 	}
 
 	for _, feed := range feeds {
@@ -350,8 +350,7 @@ func handlerFollowing(s *state, cmd command, user database.User) error {
 	}
 
 	if len(feeds) == 0 {
-		fmt.Printf("No feeds for user: %v\n", user.Name)
-		os.Exit(1)
+		fmt.Printf("no feeds for user: %v", user.Name)
 	}
 
 	for _, feed := range feeds {
@@ -376,5 +375,14 @@ func middlewareLoggedIn(handler func(s *state, cmd command, user database.User) 
 	}
 }
 
-// func handlerUnfollow(s *state, cmd command, user database.User) error {
-// }
+func handlerUnfollow(s *state, cmd command, user database.User) error {
+	if len(cmd.args) == 0 {
+		return fmt.Errorf("please add url after unfollow command")
+	}
+
+	if err := s.db.Unfollow(context.Background(), database.UnfollowParams{Name: user.Name, Url: cmd.args[0]}); err != nil {
+		return err
+	}
+
+	return nil
+}
