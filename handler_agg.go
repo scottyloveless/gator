@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"strings"
 	"time"
 
 	"github.com/scottyloveless/gator/internal/database"
@@ -35,7 +34,7 @@ func scrapeFeeds(s *state) {
 		log.Println("Couldn't get next feeds to fetch", err)
 		return
 	}
-	log.Println("Found a feed to fetch!")
+	log.Printf("Found a feed to fetch! Name: %v\n", feed.Name)
 	scrapeFeed(s.db, feed)
 }
 
@@ -51,26 +50,35 @@ func scrapeFeed(db *database.Queries, feed database.Feed) {
 		log.Printf("Couldn't collect feed %s: %v", feed.Name, err)
 		return
 	}
-	timeLayout := "Mon, 02 Jan 2006 15:04:05 +0000"
+
 	for _, item := range feedData.Channel.Item {
-		parsedTime, err := time.Parse(timeLayout, item.PubDate)
+		pubTime, err := parseTime(item.PubDate)
 		if err != nil {
-			log.Printf("error parsing time: %v", err)
-			return
+			log.Printf("%v", err)
 		}
-		post, err := db.CreatePost(context.Background(), database.CreatePostParams{
+
+		db.CreatePost(context.Background(), database.CreatePostParams{
 			Title:       item.Title,
 			Url:         item.Link,
 			Description: item.Description,
-			PublishedAt: parsedTime,
+			PublishedAt: pubTime,
 			FeedID:      feed.ID,
 		})
-		if strings.Contains(fmt.Sprintf("%v", err), "duplicate key value violates unique constraint") {
-			continue
-		}
-		if err != nil {
-			log.Printf("error adding post %v to database: %v\n", post.Title, err)
-		}
 	}
 	log.Printf("Feed %s collected, %v posts found", feed.Name, len(feedData.Channel.Item))
+}
+
+var timeLayouts = []string{
+	"Mon, 02 Jan 2006 15:04:05 -0700",
+	"Mon, 02 Jan 2006 15:04:05 MST",
+	"Mon, 2 Jan 2006 15:04:05 -0700",
+}
+
+func parseTime(timestamp string) (time.Time, error) {
+	for _, tl := range timeLayouts {
+		if t, err := time.Parse(tl, timestamp); err == nil {
+			return t, nil
+		}
+	}
+	return time.Time{}, fmt.Errorf("unrecognized time format: %s", timestamp)
 }

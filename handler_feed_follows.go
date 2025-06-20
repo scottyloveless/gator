@@ -35,12 +35,11 @@ func handlerAddFeed(s *state, cmd command, user database.User) error {
 		Name: "follow",
 		Args: []string{url},
 	}
+	fmt.Printf("Feed added successfully: %v\n", feed.Name)
 
 	if err := handlerFollow(s, newCmd, user); err != nil {
 		return err
 	}
-
-	fmt.Printf("feed added successfully: %v", feed.Name)
 
 	return nil
 }
@@ -89,7 +88,7 @@ func handlerFollow(s *state, cmd command, user database.User) error {
 		return err
 	}
 
-	fmt.Printf("Feed successfully followed by %v: %v", feedFollow.UserName, feedFollow.FeedName)
+	fmt.Printf("Feed successfully followed by %v: %v\n", feedFollow.UserName, feedFollow.FeedName)
 
 	return nil
 }
