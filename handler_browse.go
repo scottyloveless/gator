@@ -1,11 +1,11 @@
 package main
 
 import (
-	"context"
 	"fmt"
-	"log"
+	"os"
 	"strconv"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/scottyloveless/gator/internal/database"
 )
 
@@ -14,19 +14,23 @@ func browse(s *state, limit ...int) {
 	if len(limit) > 0 {
 		limitActual = limit[0]
 	}
-
-	posts, err := s.db.GetPostsForUser(context.Background(), database.GetPostsForUserParams{Name: s.cfg.CurrentUserName, Limit: int32(limitActual)})
-	if err != nil {
-		log.Printf("%v", err)
+	p := tea.NewProgram(initialModel(s, int32(limitActual)), tea.WithAltScreen())
+	if _, err := p.Run(); err != nil {
+		fmt.Printf("Alas, there's been an error: %v", err)
+		os.Exit(1)
 	}
-
-	if len(posts) == 0 {
-		log.Printf("no posts found")
-	}
-
-	for _, post := range posts {
-		printPost(post)
-	}
+	// posts, err := s.db.GetPostsForUser(context.Background(), database.GetPostsForUserParams{Name: s.cfg.CurrentUserName, Limit: int32(limitActual)})
+	// if err != nil {
+	// 	log.Printf("%v", err)
+	// }
+	//
+	// if len(posts) == 0 {
+	// 	log.Printf("no posts found")
+	// }
+	//
+	// for _, post := range posts {
+	// 	printPost(post)
+	// }
 }
 
 func handlerBrowse(s *state, cmd command) error {
