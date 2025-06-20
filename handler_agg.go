@@ -51,6 +51,8 @@ func scrapeFeed(db *database.Queries, feed database.Feed) {
 		return
 	}
 
+	numPostsAdded := 0
+
 	for _, item := range feedData.Channel.Item {
 		pubTime, err := parseTime(item.PubDate)
 		if err != nil {
